@@ -1,0 +1,593 @@
+```html
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>EMI PUZZLE FLOW CAM</title>
+
+<!-- MediaPipe Hands -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    -webkit-tap-highlight-color:transparent;
+}
+html,body{
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:#000;
+    font-family:Arial, Helvetica, sans-serif;
+    touch-action:none;
+}
+body{
+    position:fixed;
+    inset:0;
+    background: radial-gradient(circle at top,#222,#000);
+}
+
+canvas{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+}
+
+#ui{
+    position:absolute;
+    top:10px;
+    left:10px;
+    right:10px;
+    z-index:100;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+}
+
+.panel{
+    background:rgba(255,255,255,.1);
+    backdrop-filter:blur(10px);
+    color:white;
+    padding:12px;
+    border-radius:15px;
+    text-align:center;
+    font-weight:bold;
+}
+
+.row{
+    display:flex;
+    gap:10px;
+}
+
+button{
+    flex:1;
+    border:none;
+    border-radius:14px;
+    padding:14px;
+    background:#ff0055;
+    color:white;
+    font-weight:bold;
+    font-size:16px;
+}
+
+#modeBtn.cam{
+    background:#00bb66;
+}
+
+#video{
+    position:absolute;
+    right:10px;
+    bottom:10px;
+    width:120px;
+    height:160px;
+    object-fit:cover;
+    border-radius:20px;
+    border:2px solid white;
+    z-index:50;
+}
+
+#cursor{
+    position:absolute;
+    width:25px;
+    height:25px;
+    border-radius:50%;
+    background:#00ff99;
+    border:3px solid white;
+    pointer-events:none;
+    z-index:200;
+    transform:translate(-50%,-50%);
+    display:none;
+    box-shadow:0 0 20px #00ff99;
+}
+
+#pinch{
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform:translate(-50%,-50%);
+    color:white;
+    z-index:300;
+    font-size:22px;
+    font-weight:bold;
+    text-shadow:0 0 15px #000;
+}
+
+</style>
+</head>
+<body>
+
+<div id="ui">
+
+<div class="row">
+<div class="panel" id="levelText">Nivel 1</div>
+<div class="panel" id="movesText">Movimientos 0</div>
+</div>
+
+<div class="row">
+<button id="modeBtn">Modo Cámara OFF</button>
+<button id="restartBtn">Reiniciar</button>
+</div>
+
+</div>
+
+<video id="video" autoplay playsinline muted></video>
+<div id="cursor"></div>
+<div id="pinch"></div>
+
+<canvas id="game"></canvas>
+
+<script>
+
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+const cursor = document.getElementById("cursor");
+const pinchText = document.getElementById("pinch");
+
+const levelText = document.getElementById("levelText");
+const movesText = document.getElementById("movesText");
+
+const video = document.getElementById("video");
+
+let width = innerWidth;
+let height = innerHeight;
+
+canvas.width = width;
+canvas.height = height;
+
+const COLORS = [
+"#ff3355",
+"#00cc66",
+"#3399ff",
+"#ffaa00",
+"#cc33ff"
+];
+
+let board = {
+    x: width/2,
+    y: height/2 + 40,
+    radius: Math.min(width,height)*0.35
+};
+
+let currentLevel = 1;
+
+let nodes = [];
+let paths = [];
+
+let drawing = false;
+let activeColor = null;
+let currentPath = [];
+
+let moves = 0;
+
+let cameraMode = false;
+
+function resize(){
+    width = innerWidth;
+    height = innerHeight;
+
+    canvas.width = width;
+    canvas.height = height;
+
+    board.x = width/2;
+    board.y = height/2 + 40;
+    board.radius = Math.min(width,height)*0.35;
+
+    draw();
+}
+addEventListener("resize",resize);
+
+function distance(a,b){
+    return Math.hypot(a.x-b.x,a.y-b.y);
+}
+
+function randomPoint(){
+    const angle = Math.random()*Math.PI*2;
+    const radius = Math.random()*(board.radius-50);
+
+    return {
+        x: board.x + Math.cos(angle)*radius,
+        y: board.y + Math.sin(angle)*radius
+    };
+}
+
+function generateLevel(){
+
+    nodes = [];
+    paths = [];
+    currentPath = [];
+
+    const pairs = 5;
+
+    for(let i=0;i<pairs;i++){
+
+        let p1,p2;
+
+        do{
+            p1 = randomPoint();
+        }while(nodes.some(n=>distance(n,p1)<120));
+
+        do{
+            p2 = randomPoint();
+        }while(nodes.some(n=>distance(n,p2)<120));
+
+        nodes.push({
+            x:p1.x,
+            y:p1.y,
+            color:COLORS[i]
+        });
+
+        nodes.push({
+            x:p2.x,
+            y:p2.y,
+            color:COLORS[i]
+        });
+    }
+
+    draw();
+}
+
+function drawBoard(){
+
+    ctx.beginPath();
+    ctx.arc(board.x,board.y,board.radius,0,Math.PI*2);
+    ctx.fillStyle="#fafafa";
+    ctx.fill();
+
+    ctx.lineWidth=6;
+    ctx.strokeStyle="#111";
+    ctx.stroke();
+}
+
+function drawNodes(){
+
+    for(let n of nodes){
+
+        ctx.beginPath();
+        ctx.arc(n.x,n.y,18,0,Math.PI*2);
+
+        ctx.fillStyle=n.color;
+
+        ctx.shadowBlur=20;
+        ctx.shadowColor=n.color;
+
+        ctx.fill();
+
+        ctx.shadowBlur=0;
+
+        ctx.lineWidth=3;
+        ctx.strokeStyle="#000";
+        ctx.stroke();
+    }
+}
+
+function drawPath(points,color){
+
+    if(points.length<2) return;
+
+    ctx.beginPath();
+
+    ctx.moveTo(points[0].x,points[0].y);
+
+    for(let i=1;i<points.length;i++){
+        ctx.lineTo(points[i].x,points[i].y);
+    }
+
+    ctx.lineWidth=10;
+    ctx.lineCap="round";
+    ctx.lineJoin="round";
+    ctx.strokeStyle=color;
+    ctx.stroke();
+}
+
+function draw(){
+
+    ctx.clearRect(0,0,width,height);
+
+    drawBoard();
+
+    for(let p of paths){
+        drawPath(p.points,p.color);
+    }
+
+    if(currentPath.length){
+        drawPath(currentPath,activeColor);
+    }
+
+    drawNodes();
+}
+
+function getNode(pos){
+
+    for(let n of nodes){
+
+        if(distance(pos,n)<28){
+            return n;
+        }
+    }
+
+    return null;
+}
+
+function startLine(pos){
+
+    const node = getNode(pos);
+
+    if(!node) return;
+
+    drawing = true;
+
+    activeColor = node.color;
+
+    currentPath = [{
+        x:node.x,
+        y:node.y
+    }];
+
+    paths = paths.filter(p=>p.color!==activeColor);
+
+    draw();
+}
+
+function moveLine(pos){
+
+    if(!drawing) return;
+
+    const last = currentPath[currentPath.length-1];
+
+    if(distance(last,pos)<6) return;
+
+    if(distance(pos,{
+        x:board.x,
+        y:board.y
+    }) > board.radius){
+        return;
+    }
+
+    currentPath.push({
+        x:pos.x,
+        y:pos.y
+    });
+
+    draw();
+}
+
+function endLine(pos){
+
+    if(!drawing) return;
+
+    drawing=false;
+
+    const node = getNode(pos);
+
+    if(node && node.color===activeColor){
+
+        currentPath.push({
+            x:node.x,
+            y:node.y
+        });
+
+        paths.push({
+            color:activeColor,
+            points:[...currentPath]
+        });
+
+        moves++;
+
+        movesText.innerHTML = "Movimientos " + moves;
+    }
+
+    currentPath=[];
+
+    draw();
+}
+
+/* ===============================
+   TOUCH NORMAL
+================================= */
+
+canvas.addEventListener("touchstart",e=>{
+
+    if(cameraMode) return;
+
+    const t = e.touches[0];
+
+    startLine({
+        x:t.clientX,
+        y:t.clientY
+    });
+
+},{passive:false});
+
+canvas.addEventListener("touchmove",e=>{
+
+    if(cameraMode) return;
+
+    const t = e.touches[0];
+
+    moveLine({
+        x:t.clientX,
+        y:t.clientY
+    });
+
+},{passive:false});
+
+canvas.addEventListener("touchend",e=>{
+
+    if(cameraMode) return;
+
+    const t = e.changedTouches[0];
+
+    endLine({
+        x:t.clientX,
+        y:t.clientY
+    });
+
+},{passive:false});
+
+/* ===============================
+   CAMERA HAND TRACKING
+================================= */
+
+let pinch = false;
+let pinchStart = false;
+
+const hands = new Hands({
+    locateFile:(file)=>{
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+    }
+});
+
+hands.setOptions({
+    maxNumHands:1,
+    modelComplexity:1,
+    minDetectionConfidence:0.7,
+    minTrackingConfidence:0.7
+});
+
+hands.onResults(results=>{
+
+    if(!cameraMode) return;
+
+    if(results.multiHandLandmarks.length){
+
+        const hand = results.multiHandLandmarks[0];
+
+        const indexTip = hand[8];
+        const thumbTip = hand[4];
+
+        const x = (1-indexTip.x) * width;
+        const y = indexTip.y * height;
+
+        cursor.style.display="block";
+        cursor.style.left = x+"px";
+        cursor.style.top = y+"px";
+
+        const dx = thumbTip.x - indexTip.x;
+        const dy = thumbTip.y - indexTip.y;
+
+        const dist = Math.hypot(dx,dy);
+
+        if(dist < 0.05){
+
+            pinchText.innerHTML="TOCANDO";
+
+            if(!pinch){
+
+                pinchStart = true;
+
+                startLine({x,y});
+            }
+
+            pinch=true;
+
+            moveLine({x,y});
+
+        }else{
+
+            pinchText.innerHTML="";
+
+            if(pinch){
+
+                endLine({x,y});
+            }
+
+            pinch=false;
+        }
+
+    }else{
+
+        cursor.style.display="none";
+
+        pinchText.innerHTML="";
+    }
+});
+
+let cam = null;
+
+async function startCamera(){
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+        video:{
+            facingMode:"user"
+        }
+    });
+
+    video.srcObject = stream;
+
+    cam = new Camera(video,{
+        onFrame:async()=>{
+            await hands.send({image:video});
+        },
+        width:640,
+        height:480
+    });
+
+    cam.start();
+}
+
+document.getElementById("modeBtn").onclick = async function(){
+
+    cameraMode = !cameraMode;
+
+    if(cameraMode){
+
+        this.innerHTML = "Modo Cámara ON";
+        this.classList.add("cam");
+
+        await startCamera();
+
+    }else{
+
+        this.innerHTML = "Modo Cámara OFF";
+        this.classList.remove("cam");
+
+        cursor.style.display="none";
+
+        if(video.srcObject){
+
+            video.srcObject.getTracks().forEach(t=>t.stop());
+        }
+    }
+};
+
+document.getElementById("restartBtn").onclick=()=>{
+
+    moves=0;
+
+    movesText.innerHTML="Movimientos 0";
+
+    generateLevel();
+};
+
+generateLevel();
+
+</script>
+</body>
+</html>
+```
