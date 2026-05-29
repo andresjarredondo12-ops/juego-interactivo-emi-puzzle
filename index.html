@@ -1,104 +1,86 @@
-```html
 <!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport"
-content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 
-<title>EMI PUZZLE FLOW CAM MOBILE</title>
+<meta name="viewport"
+content="width=device-width,
+initial-scale=1,
+maximum-scale=1,
+user-scalable=no,
+viewport-fit=cover">
+
+<title>EMI FLOW IOS</title>
 
 <style>
 
-*{
+html,body{
 margin:0;
 padding:0;
-box-sizing:border-box;
--webkit-tap-highlight-color:transparent;
-}
-
-html,body{
 width:100%;
 height:100%;
 overflow:hidden;
 background:#000;
-font-family:Arial,Helvetica,sans-serif;
+font-family:Arial,sans-serif;
+-webkit-user-select:none;
+user-select:none;
 touch-action:none;
 }
 
 body{
-position:fixed;
-inset:0;
+position:relative;
 background:
-radial-gradient(circle at top,#222,#000);
+linear-gradient(to bottom,#222,#000);
 }
 
 canvas{
 position:absolute;
-inset:0;
+top:0;
+left:0;
 width:100%;
 height:100%;
+display:block;
 touch-action:none;
 }
 
 #ui{
 position:absolute;
-top:10px;
+top:env(safe-area-inset-top,10px);
 left:10px;
 right:10px;
-z-index:100;
-display:flex;
-flex-direction:column;
-gap:10px;
+z-index:10;
 }
 
 .row{
 display:flex;
 gap:10px;
+margin-bottom:10px;
 }
 
 .panel{
 flex:1;
-background:rgba(255,255,255,.1);
-backdrop-filter:blur(10px);
+background:rgba(255,255,255,.15);
+color:#fff;
 padding:12px;
-border-radius:16px;
-color:white;
-font-weight:bold;
+border-radius:14px;
 text-align:center;
+font-weight:bold;
+font-size:15px;
 }
 
 button{
 flex:1;
 border:none;
-border-radius:16px;
 padding:14px;
-background:#ff0055;
-color:white;
+border-radius:14px;
 font-size:16px;
 font-weight:bold;
+background:#ff0066;
+color:white;
 }
 
 button:active{
-transform:scale(.95);
-}
-
-#cameraBtn.active{
-background:#00bb66;
-}
-
-#video{
-position:absolute;
-right:10px;
-bottom:10px;
-width:110px;
-height:150px;
-object-fit:cover;
-border-radius:20px;
-border:2px solid white;
-z-index:50;
-background:black;
-display:none;
+opacity:.7;
 }
 
 #message{
@@ -106,11 +88,11 @@ position:absolute;
 top:50%;
 left:50%;
 transform:translate(-50%,-50%);
-color:white;
 font-size:34px;
 font-weight:bold;
-z-index:300;
+color:white;
 display:none;
+z-index:20;
 text-shadow:0 0 20px black;
 }
 
@@ -126,13 +108,10 @@ text-shadow:0 0 20px black;
 </div>
 
 <div class="row">
-<button id="cameraBtn">Cámara OFF</button>
 <button id="restartBtn">Reiniciar</button>
 </div>
 
 </div>
-
-<video id="video" autoplay playsinline muted></video>
 
 <div id="message"></div>
 
@@ -140,42 +119,45 @@ text-shadow:0 0 20px black;
 
 <script>
 
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+const canvas =
+document.getElementById("game");
 
-const levelText = document.getElementById("levelText");
-const movesText = document.getElementById("movesText");
-const message = document.getElementById("message");
+const ctx =
+canvas.getContext("2d");
 
-const video = document.getElementById("video");
-const cameraBtn = document.getElementById("cameraBtn");
+const levelText =
+document.getElementById("levelText");
 
-let width;
-let height;
-let dpr;
+const movesText =
+document.getElementById("movesText");
+
+const message =
+document.getElementById("message");
+
+let W,H;
 
 function resize(){
 
-dpr = window.devicePixelRatio || 1;
+W = window.innerWidth;
+H = window.innerHeight;
 
-width = innerWidth;
-height = innerHeight;
+canvas.width = W;
+canvas.height = H;
 
-canvas.width = width * dpr;
-canvas.height = height * dpr;
+board.x = W/2;
+board.y = H/2 + 30;
 
-canvas.style.width = width+"px";
-canvas.style.height = height+"px";
-
-ctx.setTransform(dpr,0,0,dpr,0,0);
-
-board.x = width/2;
-board.y = height/2 + 30;
-board.radius = Math.min(width,height)*0.35;
+board.radius =
+Math.min(W,H)*0.35;
 
 draw();
 
 }
+
+window.addEventListener(
+"resize",
+resize
+);
 
 const COLORS = [
 "#ff3355",
@@ -183,17 +165,17 @@ const COLORS = [
 "#3399ff",
 "#ffaa00",
 "#cc33ff",
-"#00ffee",
-"#ff6699"
+"#00ffee"
 ];
+
+let level = 1;
+let moves = 0;
 
 let board = {
 x:0,
 y:0,
 radius:0
 };
-
-let currentLevel = 1;
 
 let nodes = [];
 let paths = [];
@@ -202,25 +184,32 @@ let drawing = false;
 let activeColor = null;
 let currentPath = [];
 
-let moves = 0;
+function random(min,max){
+
+return Math.random()*(max-min)+min;
+
+}
 
 function distance(a,b){
 
-return Math.hypot(
-a.x-b.x,
-a.y-b.y
-);
+const dx = a.x-b.x;
+const dy = a.y-b.y;
+
+return Math.sqrt(dx*dx+dy*dy);
 
 }
 
 function randomPoint(){
 
-const angle = Math.random()*Math.PI*2;
-const radius = Math.random()*(board.radius-60);
+const angle =
+Math.random()*Math.PI*2;
+
+const r =
+Math.random()*(board.radius-50);
 
 return{
-x:board.x + Math.cos(angle)*radius,
-y:board.y + Math.sin(angle)*radius
+x:board.x + Math.cos(angle)*r,
+y:board.y + Math.sin(angle)*r
 };
 
 }
@@ -231,7 +220,8 @@ nodes = [];
 paths = [];
 currentPath = [];
 
-const pairs = Math.min(3+currentLevel,7);
+const pairs =
+Math.min(level+2,6);
 
 for(let i=0;i<pairs;i++){
 
@@ -240,12 +230,20 @@ let p1,p2;
 do{
 p1 = randomPoint();
 }
-while(nodes.some(n=>distance(n,p1)<90));
+while(
+nodes.some(
+n=>distance(n,p1)<90
+)
+);
 
 do{
 p2 = randomPoint();
 }
-while(nodes.some(n=>distance(n,p2)<90));
+while(
+nodes.some(
+n=>distance(n,p2)<90
+)
+);
 
 nodes.push({
 x:p1.x,
@@ -277,10 +275,10 @@ board.radius,
 Math.PI*2
 );
 
-ctx.fillStyle="#fafafa";
+ctx.fillStyle="#f2f2f2";
 ctx.fill();
 
-ctx.lineWidth=6;
+ctx.lineWidth=5;
 ctx.strokeStyle="#111";
 ctx.stroke();
 
@@ -288,11 +286,17 @@ ctx.stroke();
 
 function drawNodes(){
 
-for(const n of nodes){
+for(let n of nodes){
 
 ctx.beginPath();
 
-ctx.arc(n.x,n.y,18,0,Math.PI*2);
+ctx.arc(
+n.x,
+n.y,
+18,
+0,
+Math.PI*2
+);
 
 ctx.fillStyle=n.color;
 
@@ -317,18 +321,23 @@ if(points.length<2) return;
 
 ctx.beginPath();
 
-ctx.moveTo(points[0].x,points[0].y);
+ctx.moveTo(
+points[0].x,
+points[0].y
+);
 
 for(let i=1;i<points.length;i++){
 
-ctx.lineTo(points[i].x,points[i].y);
+ctx.lineTo(
+points[i].x,
+points[i].y
+);
 
 }
 
 ctx.lineWidth=10;
 ctx.lineCap="round";
 ctx.lineJoin="round";
-
 ctx.strokeStyle=color;
 
 ctx.stroke();
@@ -337,19 +346,25 @@ ctx.stroke();
 
 function draw(){
 
-ctx.clearRect(0,0,width,height);
+ctx.clearRect(0,0,W,H);
 
 drawBoard();
 
-for(const p of paths){
+for(let p of paths){
 
-drawPath(p.points,p.color);
+drawPath(
+p.points,
+p.color
+);
 
 }
 
 if(currentPath.length){
 
-drawPath(currentPath,activeColor);
+drawPath(
+currentPath,
+activeColor
+);
 
 }
 
@@ -359,9 +374,9 @@ drawNodes();
 
 function getNode(pos){
 
-for(const n of nodes){
+for(let n of nodes){
 
-if(distance(pos,n)<28){
+if(distance(pos,n)<25){
 
 return n;
 
@@ -425,29 +440,30 @@ draw();
 
 }
 
-function checkVictory(){
+function checkWin(){
 
-const colors = [
-...new Set(nodes.map(n=>n.color))
-];
+const totalColors =
+new Set(
+nodes.map(n=>n.color)
+).size;
 
-return paths.length === colors.length;
+return paths.length === totalColors;
 
 }
 
 function nextLevel(){
 
 message.style.display="block";
-message.innerHTML="NIVEL COMPLETADO";
+message.innerHTML="COMPLETADO";
 
 setTimeout(()=>{
 
 message.style.display="none";
 
-currentLevel++;
+level++;
 
-levelText.innerHTML =
-"Nivel " + currentLevel;
+levelText.innerHTML=
+"Nivel "+level;
 
 generateLevel();
 
@@ -459,11 +475,14 @@ function endLine(pos){
 
 if(!drawing) return;
 
-drawing = false;
+drawing=false;
 
 const node = getNode(pos);
 
-if(node && node.color===activeColor){
+if(
+node &&
+node.color===activeColor
+){
 
 currentPath.push({
 x:node.x,
@@ -477,10 +496,10 @@ points:[...currentPath]
 
 moves++;
 
-movesText.innerHTML =
-"Movimientos " + moves;
+movesText.innerHTML=
+"Movimientos "+moves;
 
-if(checkVictory()){
+if(checkWin()){
 
 nextLevel();
 
@@ -494,142 +513,71 @@ draw();
 
 }
 
-function getTouchPos(e){
+function touchPos(e){
 
 const rect =
 canvas.getBoundingClientRect();
 
-const touch =
-e.touches[0] || e.changedTouches[0];
+const t =
+e.touches[0] ||
+e.changedTouches[0];
 
 return{
-x:touch.clientX - rect.left,
-y:touch.clientY - rect.top
+x:t.clientX-rect.left,
+y:t.clientY-rect.top
 };
 
 }
 
-/* TOUCH MOBILE */
+/* TOUCH IOS */
 
-canvas.addEventListener("touchstart",e=>{
+canvas.addEventListener(
+"touchstart",
+function(e){
 
 e.preventDefault();
 
 startLine(
-getTouchPos(e)
+touchPos(e)
 );
 
-},{passive:false});
+},
+{passive:false}
+);
 
-canvas.addEventListener("touchmove",e=>{
+canvas.addEventListener(
+"touchmove",
+function(e){
 
 e.preventDefault();
 
 moveLine(
-getTouchPos(e)
+touchPos(e)
 );
 
-},{passive:false});
+},
+{passive:false}
+);
 
-canvas.addEventListener("touchend",e=>{
+canvas.addEventListener(
+"touchend",
+function(e){
 
 e.preventDefault();
 
 endLine(
-getTouchPos(e)
+touchPos(e)
 );
 
-},{passive:false});
-
-/* MOUSE DESKTOP */
-
-let mouseDown = false;
-
-canvas.addEventListener("mousedown",e=>{
-
-mouseDown=true;
-
-startLine({
-x:e.clientX,
-y:e.clientY
-});
-
-});
-
-canvas.addEventListener("mousemove",e=>{
-
-if(!mouseDown) return;
-
-moveLine({
-x:e.clientX,
-y:e.clientY
-});
-
-});
-
-canvas.addEventListener("mouseup",e=>{
-
-mouseDown=false;
-
-endLine({
-x:e.clientX,
-y:e.clientY
-});
-
-});
-
-/* CAMERA SIMPLE */
-
-let stream = null;
-
-cameraBtn.onclick = async()=>{
-
-if(stream){
-
-stream.getTracks().forEach(
-t=>t.stop()
-);
-
-stream = null;
-
-video.style.display="none";
-
-cameraBtn.innerHTML="Cámara OFF";
-cameraBtn.classList.remove("active");
-
-return;
-
-}
-
-try{
-
-stream =
-await navigator.mediaDevices.getUserMedia({
-video:{
-facingMode:"user"
 },
-audio:false
-});
-
-video.srcObject = stream;
-
-video.style.display="block";
-
-cameraBtn.innerHTML="Cámara ON";
-cameraBtn.classList.add("active");
-
-}catch(err){
-
-alert(
-"No se pudo abrir la cámara.\n\nUsa HTTPS o Chrome móvil."
+{passive:false}
 );
 
-}
+/* BUTTON */
 
-};
-
-document.getElementById("restartBtn")
-.onclick=()=>{
+document.getElementById(
+"restartBtn"
+).onclick=function(){
 
 moves=0;
 
@@ -640,11 +588,6 @@ generateLevel();
 
 };
 
-window.addEventListener(
-"resize",
-resize
-);
-
 resize();
 
 generateLevel();
@@ -653,4 +596,3 @@ generateLevel();
 
 </body>
 </html>
-```
